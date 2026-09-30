@@ -4,11 +4,37 @@
 `nanoID` is a bioinformatics pipeline for recovering amplicon sequence variants (ASVs) from noisy long-read amplicon sequencing data. It supports Oxford Nanopore Technologies (ONT) R10.4.1 and Pacific Biosciences (PacBio) sequencing data and provides workflows for both per-sample ASV recovery (`nanoid condens`) and multi-sample ASV profiling (`nanoid profile`).
 
 ### How does nanoID work?
-## How nanoID works
 
-`nanoID` recovers ASVs from primer-trimmed and quality-filtered long-read amplicon data through consensus-based error correction, graph-based denoising, abundance estimation, and chimera filtering.
+#### 🔬 Per-sample ASV recovery: `nanoID condens`
 
-### Per-sample ASV recovery: `nanoID condens`
+```
+Reads
+  │
+  ├─ Optional: primer trimming, quality/length filtering, orientation correction
+  ▼
+Split reads into N disjoint subsets
+  │
+  ├─ Near-neighbor search (VSEARCH)
+  ├─ Consensus generation (abPOA)
+  └─ Consensus sequences ("conseqs")
+  ▼
+Cross-split shared-neighbor graph
+  • Nodes: unique conseqs
+  • Edges: shared contributing reads
+  ▼
+Graph-based denoising
+(constrained abundance ascent)
+  ▼
+Candidate ASVs
+  ▼
+Abundance estimation
+(read assignment + EM)
+  ▼
+Chimera filtering
+(UCHIME3 + custom filter)
+  ▼
+Final ASVs and abundances
+```
 
 1. **Near-neighbor search**  
    For each read, `nanoID condens` identifies closely related reads using pairwise sequence identity.
@@ -28,8 +54,28 @@ To reduce false-positive ASVs, reads are processed in multiple disjoint splits. 
    Candidate ASVs are screened for chimeras, yielding the final non-chimeric ASVs and their estimated abundances.
 
 
-### Multi-sample integration: `nanoID profile`
+### 📊 Multi-sample integration: `nanoID profile`
 
+```
+ASVs from all samples
+      +
+Pre-denoising conseqs
+  ▼
+Global ASV catalogue
+  ▼
+Sample-wise ASV rescue
+(minimum abundance threshold)
+  ▼
+Expanded ASV sets
+  ▼
+Read reassignment + EM quantification
+  ▼
+ASV abundance matrix
+  ▼
+Optional OTU clustering
+  ▼
+OTU abundance matrix
+```
 `nanoID profile` improves consistency of ASV detection across samples by rescuing ASVs that are present in the global ASV set and supported by pre-denoising consensus sequences within a sample. The expanded sample-specific ASV sets are then re-quantified. 
 
 Optionally, ASVs can be clustered into high-identity operational taxonomic units (OTUs), leveraging the high accuracy of ASV sequences rather than clustering noisy reads directly.
