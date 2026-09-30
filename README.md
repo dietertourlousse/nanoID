@@ -1,21 +1,38 @@
-## nanoID: Reconstruction of Amplicon Sequence Variants and Species-Level Profiling Using Long Amplicon Reads
+## nanoID: Recovery of Exact Sequence Variants from Long-Read Amplicon Data
 
 ### What is nanoID?
-`nanoID` is a new bioinformatics tool for accurate and sensitive reconstruction of amplicon sequence variants (ASVs) from long‑read amplicon sequencing data. The method is applicable to medium‑ and high‑accuracy reads generated using Oxford Nanopore Technologies (ONT) and PacBio sequencing platforms.
-In addition to ASV reconstruction, `nanoID` enables robust species‑level profiling by greedy clustering of the reconstructed ASVs at 99% sequence identity, followed by quantification of the species‑level operational taxonomic units (OTUs) using Emu.
+`nanoID` is a bioinformatics pipeline for recovering amplicon sequence variants (ASVs) from noisy long-read amplicon sequencing data. It supports Oxford Nanopore Technologies (ONT) R10.4.1 and Pacific Biosciences (PacBio) sequencing data and provides workflows for both per-sample ASV recovery (`nanoid condens`) and multi-sample ASV profiling (`nanoid profile`).
+
+### How does nanoID work?
+## How nanoID works
+
+`nanoID` recovers ASVs from primer-trimmed and quality-filtered long-read amplicon data through consensus-based error correction, graph-based denoising, abundance estimation, and chimera filtering.
+
+### Per-sample ASV recovery: `nanoID condens`
+
+1. **Near-neighbor search**  
+   For each read, `nanoID condens` identifies closely related reads using pairwise sequence identity.
+
+2. **Consensus generation**  
+   Consensus sequences are generated from, potentially, overlapping read neighborhoods using adaptive banded partial-order alignment. Because neighborhoods can overlap, a read may contribute to multiple consensus sequences.
+
+3. **Graph-based denoising**  
+Consensus sequences are counted and represented as nodes in a shared-neighbor graph, with edges connecting Consensus sequences that share contributing reads. Candidate ASVs are identified by constrained abundance ascent, in which less abundant conseqs are linked to sufficiently more abundant neighboring conseqs.
+
+To reduce false-positive ASVs, reads are processed in multiple disjoint splits. Consensus sequences and shared-neighbor graphs are generated independently for each split and consolidated.
+
+4. **Abundance estimation**  
+   Reads are matched to candidate ASVs using Levenshtein distance, and their proportional assignments are estimated by expectation-maximization (EM).
+
+5. **Chimera filtering**  
+   Candidate ASVs are screened for chimeras, yielding the final non-chimeric ASVs and their estimated abundances.
 
 
-> [!NOTE]
-> Although `nanoID condens` can recover ASVs, direct ASV‑level analysis is not recommended for full‑length 16S rRNA gene data due to extensive splitting of genomes, as pointed out by [Schloss](https://journals.asm.org/doi/10.1128/msphere.00191-21) even for short amplicons, and the potential for variable resolution of closely related ASVs across samples.
+### Multi-sample integration: `nanoID profile`
 
+`nanoID profile` improves consistency of ASV detection across samples by rescuing ASVs that are present in the global ASV set and supported by pre-denoising consensus sequences within a sample. The expanded sample-specific ASV sets are then re-quantified. 
 
-Accordingly, we suggest one of the following strategies for downstream analysis:
-
-- Cluster ASVs into approximate species‑level OTUs and quantify them using `nanoid profile`. This enables feature‑level analyses (e.g. differential abundance testing) independent of taxonomy, while operating at a biologically meaningful level of resolution.
-- Taxonomically annotate ASVs and aggregate abundance tables by taxonomy.
-- 🧩 **Combined approach (preferred and common in traditional pipelines).** Apply `nanoid profile` to generate OTU‑level abundance tables, then assign taxonomy based on representative OTU sequences. Downstream analyses can be performed either directly on OTU/feature abundances or after collapsing features at selected taxonomic ranks.
-
----
+Optionally, ASVs can be clustered into high-identity operational taxonomic units (OTUs), leveraging the high accuracy of ASV sequences rather than clustering noisy reads directly.
 
 ## 🚀 Installation
 
@@ -32,7 +49,7 @@ mamba create -n nanoid -c conda-forge -c bioconda \
 mamba activate nanoid
 
 # Download and install nanoID
-wget https://github.com/aistBMRG/nanoID/releases/download/v0.2.0/nanoid-0.1.0.tar.gz
+wget https://github.com/dietertourlousse/nanoID/releases/download/v1.0/nanoid-1.0.tar.gz
 pip install --no-build-isolation --no-deps nanoid-0.2.0.tar.gz
 rm nanoid-0.2.0.tar.gz
 ```
