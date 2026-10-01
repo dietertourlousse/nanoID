@@ -23,12 +23,12 @@ Cross-split shared-neighbor graph
   • Edges: shared contributing reads
   ▼
 Graph-based denoising
-(constrained abundance ascent)
+(constrained abundance ascent, retain nodes without allowable ascent)
   ▼
 Candidate ASVs
   ▼
 Abundance estimation
-(read assignment + EM)
+(read matching, Levenshtein distance, + EM)
   ▼
 Chimera filtering
 (UCHIME3 + custom filter)
@@ -37,13 +37,13 @@ Final ASVs and abundances
 ```
 
 1. **Near-neighbor search**  
-   For each read, `nanoID condens` identifies closely related reads using pairwise sequence identity.
+   For each read, `nanoID condens` identifies closely related reads using pairwise sequence identity. By default, 4 neighbors are used for consensus generation.
 
 2. **Consensus generation**  
    Consensus sequences are generated from, potentially, overlapping read neighborhoods using adaptive banded partial-order alignment. Because neighborhoods can overlap, a read may contribute to multiple consensus sequences.
 
 3. **Graph-based denoising**  
-Consensus sequences are counted and represented as nodes in a shared-neighbor graph, with edges connecting Consensus sequences that share contributing reads. Candidate ASVs are identified by constrained abundance ascent, in which less abundant conseqs are linked to sufficiently more abundant neighboring conseqs.
+Consensus sequences are counted and represented as nodes in a shared-neighbor graph, with edges connecting consensus sequences that share contributing reads. Candidate ASVs are identified by constrained abundance ascent, in which less abundant conseqs are linked to sufficiently more abundant neighboring conseqs.
 
 To reduce false-positive ASVs, reads are processed in multiple disjoint splits. Consensus sequences and shared-neighbor graphs are generated independently for each split and consolidated.
 
@@ -51,7 +51,7 @@ To reduce false-positive ASVs, reads are processed in multiple disjoint splits. 
    Reads are matched to candidate ASVs using Levenshtein distance, and their proportional assignments are estimated by expectation-maximization (EM).
 
 5. **Chimera filtering**  
-   Candidate ASVs are screened for chimeras, yielding the final non-chimeric ASVs and their estimated abundances.
+  Candidate ASVs are screened for chimeras using UCHIME and a more stringent prefix-suffix matching algorithm, yielding a final set of non-chimeric ASVs and their estimated abundances.
 
 
 ### 📊 Multi-sample integration: `nanoID profile`
@@ -68,13 +68,10 @@ Sample-wise ASV rescue
   ▼
 Expanded ASV sets
   ▼
-Read reassignment + EM quantification
+EM quantification
   ▼
 ASV abundance matrix
-  ▼
-Optional OTU clustering
-  ▼
-OTU abundance matrix
+
 ```
 `nanoID profile` improves consistency of ASV detection across samples by rescuing ASVs that are present in the global ASV set and supported by pre-denoising consensus sequences within a sample. The expanded sample-specific ASV sets are then re-quantified. 
 
@@ -82,22 +79,22 @@ Optionally, ASVs can be clustered into high-identity operational taxonomic units
 
 ## 🚀 Installation
 
-The recommended way to install `nanoID` and its dependencies is via **conda** or **mamba**.
+#### Requirements
+- nanoID requires Python 3.10–3.13 for compatibility with pyabpoa
+- nanoID requires the following external programs:
+    - VSEARCH ([https://github.com/torognes/vsearch])
+    - Cutadapt, optional ([https://github.com/marcelm/cutadapt])
+    - Emu, optional ([https://github.com/treangenlab/emu])
 
-```sh
-# Create a dedicated environment and install dependencies
-# Note: Emu is optional and only required for species-level profiling
-mamba create -n nanoid -c conda-forge -c bioconda \
-    python=3.10 numpy scipy pandas biopython joblib rapidfuzz pyabpoa kneed \
-    vsearch cutadapt emu
+#### Installation
 
-# Activate the environment
-mamba activate nanoid
-
-# Download and install nanoID
-wget https://github.com/dietertourlousse/nanoID/releases/download/v1.0/nanoid-1.0.tar.gz
-pip install --no-build-isolation --no-deps nanoid-0.2.0.tar.gz
-rm nanoid-0.2.0.tar.gz
+```
+conda create -n nanoid \
+    -c conda-forge -c bioconda \
+    "python>=3.10,<3.14" vsearch cutadapt
+conda activate nanoid
+wget https://github.com/dietertourlousse/nanoID/releases/download/v0.1/nanoid-0.1.tar.gz
+pip install nanoid-0.1.tar.gz
 ```
 
 ##### Verify installation
@@ -111,7 +108,7 @@ nanoid -h
 ```
 usage: nanoid [-h] [-v] <command> ...
 
-nanoID: Long‑read amplicon denoising and species profiling
+nanoID: Long‑read amplicon denoising and profiling tool
 
 options:
   -h, --help     show this help message and exit
@@ -120,7 +117,7 @@ options:
 Subcommands:
   <command>
     condens      Workflow for recovering ASVs.
-    profile      Workflow for species-level profiling based on recovered ASVs.
+    profile      Workflow for profiling based on recovered ASVs.
 ```
 
 ---
@@ -159,25 +156,26 @@ nanoid profile -i nanoid_condens -o nanoid_profile
 
 🖥️ **Detailed usage**
 
-`nanoid condens`
+`nanoid condens -h`
 
 ```
 General settings:
   --input_fastq INPUT_FASTQ, -i INPUT_FASTQ
-                        Input FASTQ file containing raw Nanopore amplicon reads. (default: None)
+                        Input FASTQ file. (default: None)
   --output_directory OUTPUT_DIRECTORY, -o OUTPUT_DIRECTORY
-                        Output directory for all generated files. (default: None)
+                        Output directory. (default: None)
   --randseed RANDSEED, -s RANDSEED
                         Random seed used for fastq splitting / subsampling. (default: 21336)
   --threads THREADS, -t THREADS
-                        Number of threads. (default: 8)
-  --keep_intermediates  Keep all intermediate files instead of deleting them. (default: False)
+                        Number of threads. (default: 12)
+  --remove_intermediates
+                        Add this flag to remove intermediate files. (default: False)
 
 Cutadapt parameters:
   --cutadapt_f_primer CUTADAPT_F_PRIMER
-                        Forward primer sequence. (default: AGRGTTYGATYHTGGCTCAG)
+                        Forward primer. (default: AGRGTTYGATYHTGGCTCAG)
   --cutadapt_r_primer_rc CUTADAPT_R_PRIMER_RC
-                        Reverse primer sequence (reverse-complemented). (default: AAGTCGTAACAAGGTARCCG)
+                        Reverse primer (reverse-complemented). (default: AAGTCGTAACAAGGTARCCG)
   --cutadapt_f_primer_overlap CUTADAPT_F_PRIMER_OVERLAP
                         Min overlap for forward primer (None: use primer length). (default: None)
   --cutadapt_r_primer_overlap CUTADAPT_R_PRIMER_OVERLAP
@@ -187,135 +185,83 @@ Cutadapt parameters:
   --cutadapt_r_primer_errors CUTADAPT_R_PRIMER_ERRORS
                         Max mismatches for reverse primer. (default: 2)
   --cutadapt_mean_quality CUTADAPT_MEAN_QUALITY
-                        Min mean read quality after trimming. (default: 20)
+                        Min mean read quality after trimming. (default: 16)
   --cutadapt_minimum_length CUTADAPT_MINIMUM_LENGTH
                         Min read length after primer trimming. (default: 1200)
   --cutadapt_maximum_length CUTADAPT_MAXIMUM_LENGTH
                         Max read length after primer trimming. (default: 1800)
   --cutadapt_maximum_expected_errors CUTADAPT_MAXIMUM_EXPECTED_ERRORS
                         Max expected errors after primer trimming. (default: 99)
-  --skip_cutadapt       Skip primer trimming with Cutadapt. (default: False)
+  --skip_cutadapt       Add this flag to skip primer trimming with Cutadapt. (default: False)
 
 Splitting parameters:
-  --disjoint_splits DISJOINT_SPLITS
-                        Number of disjoint FASTQ splits. (default: 3)
-  --max_reads_per_split MAX_READS_PER_SPLIT
-                        Maximum number of reads per fastq split. (default: 40000)
-
-Neighbor search parameters:
-  --vsearch_id VSEARCH_ID
-                        Min identity for near neighbor search. (default: 0.96)
-  --vsearch_maxaccepts VSEARCH_MAXACCEPTS
-                        Max number of near neighbors per read. (default: 10)
+  --fastq_splits FASTQ_SPLITS
+                        Number of FASTQ splits. (default: 2)
+  --reads_per_split READS_PER_SPLIT
+                        Number of reads per FASTQ split (0: even splits). (default: 0)
 
 Condens parameters:
   --neighbors_n NEIGHBORS_N
-                        Number of near neighbors per consensus. (default: 4)
-  --kappa KAPPA         Abundance dominance threshold (kappa). If not set, kappa is selected automatically by grid search. (default:
-                        None)
+                        Number of neighbors per consensus. (default: 4)
+  --kappa KAPPA         Abundance dominance threshold for graph acsent. (default: 4.0)
+  --min_conseq_size MIN_CONSEQ_SIZE
+                        Min size (counts) conseq, per split. (default: 8)
 
-Quant parameters:
-  --min_identity MIN_IDENTITY
-                        Min identity. (default: 0.96)
-  --min_count MIN_COUNT
-                        Min estimated read count for pruning. (default: 1.0)
-
-Chimera check parameters:
-  --abskew ABSKEW       abskew parameter for uchime3_denovo. (default: 4)
-  --skip_uchime         Skip uchime3_denovo. (default: False)
+Additional chimera/bimera detection parameters:
+  --skip_additional_chimera_check
+                        Add this flag to SKIP additional bimera/chimera filtering (CAUTION: aggressive default settings, may lead to false-positives).
+                        (default: False)
+  --abskew ABSKEW       Min abundance ratio parent to query. (default: 2.0)
+  --min_parent_len_frac MIN_PARENT_LEN_FRAC
+                        Min prefix/suffix lenght fraction of parent to match query. (default: 0.05)
+  --min_parent_div MIN_PARENT_DIV
+                        Min divergence between parents. (default: 0.03)
+  --min_query_cov MIN_QUERY_COV
+                        Min fraction of query covered by parent prefix + suffix. (default: 0.5)
+  --allow_one_off ALLOW_ONE_OFF
+                        Add this flag to allow one error between query and parent for prefix and suffix. (default: False)
 ```
 
-`nanoid profile`
+`nanoid profile -h`
 
 ```
-General settings:
-  --threads THREADS, -t THREADS
-                        Number of threads. (default: 8)
-  --input_directory INPUT_DIRECTORY, -i INPUT_DIRECTORY
-                        Input directory containing ASV files. (default: None)
-  --output_directory OUTPUT_DIRECTORY, -o OUTPUT_DIRECTORY
-                        Output directory for profiling results. (default: None)
+  -i INPUT_DIRECTORY, --input_directory INPUT_DIRECTORY
+                        Input directory containing FASTQ files and FASTA files. (default: None)
+  -o OUTPUT_DIRECTORY, --output_directory OUTPUT_DIRECTORY
+                        Output directory (default: None)
   --fastq_pattern FASTQ_PATTERN
-                        Filename pattern for FASTQ files. (default: _cutadapt_split.all.fastq)
+                        Substring pattern for FASTQ files from input directory. (default: _split.all.fastq)
   --fasta_pattern FASTA_PATTERN
-                        Filename pattern for FASTA files with ASV sequences. (default: _uchime.fasta)
-
-Import settings:
-  --min_total_size_uniques MIN_TOTAL_SIZE_UNIQUES
-                        Min total read count. (default: 0)
+                        Substring pattern for FASTA files from input directory. (default: _nanoid_final.fasta)
+  --min_size_uniques MIN_SIZE_UNIQUES
+                        Min total size (counts) to retain ASV in global pool. (default: 2)
   --min_prev_uniques MIN_PREV_UNIQUES
-                        Min prevalence. (default: 0)
-
-Cluster settings:
+                        Min prevalence to retain ASV in global pool. (default: 1)
+  --recruit_min_size RECRUIT_MIN_SIZE
+                        Min size (count, per split) for ASV to recruit/rescue to per-sample ASVs based on conseqs prior to denoising. (default: 2)
   --cluster_id CLUSTER_ID
-                        Identity threshold for clustering. (default: 0.99)
+                        Identity threshold for OTU clustering. (default: 0.99)
+  --run_emu_quant       Add this flag to Emu quantification of OTUs. (default: False)
+  --include_seqs_emu_db {all,representatives}
+                        Sequences to include in Emu database. (default: representatives)
+  -t THREADS, --threads THREADS
+                        Number of threads. (default: 12)
+  -f, --force           Overwrite output directory if it already exists. (default: False)
+  -y, --yes             Assume yes for overwrite prompts. (default: False)
+  -h, --help            Show this help message and exit.
 ```
 
 ---
-
-### 🔬 Schematic of `nanoid condens`
-
-```
-reads
-↓
-[cutadapt, optional] ─ primer trimming, length/quality filtering, read orientation (--revcomp flag)
-↓
-[N disjoint_splits]
-  ├─ split 1 ─▶ [vsearch, all vs. all] ─▶ [abPOA consensus, neighbors_n reads] ─▶ conseqs₁
-  ├─ split 2 ─▶ [vsearch, all vs. all] ─▶ [abPOA consensus, neighbors_n reads] ─▶ conseqs₂
-  └─ split N ─▶ [vsearch, all vs. all] ─▶ [abPOA consensus, neighbors_n reads] ─▶ conseqsₙ
-↓
-┌─────────────────────────────────────────────┐
-  CROSS‑SPLIT CONSENSUS GRAPH
-  nodes = intersection(conseqs₁ … conseqsₙ)
-  edges = union(shared‑neighbor edges)
-└─────────────────────────────────────────────┘
-↓
-[graph ascent, κ threshold]
-  cross-split constrained graph ascent
-↓
-[graph peaks] → condensed conseqs
-↓
-[EM quantification] → read assignment
-↓
-[uchime3_denovo] → chimera removal
-↓
-Amplicon Sequence Variants (ASVs)
-```
 ##### Output
 
-* Fasta file `{basename}_nanoid_uchime.fasta` of ASV sequences with USEARCH/VSEARCH-style size annotations.
+* Fasta file `{basename}_nanoid_final.fasta` of ASV sequences with USEARCH/VSEARCH-style size annotations.
 * Log file `{basename}_nanoid_condens.log`
 
-### 🔬 Schematic of `nanoid profile`
-
-```
-ASVs
-↓
-[dereplication across samples]
-  └─ optional: total count / prevalence filtering
-↓
-[VSEARCH clustering]
-  └─ greedy clustering into OTUs [nanOTUs]
-     (--cluster_smallmem, 99% identity)
-↓
-[nanOTUs]
-↓
-[Emu quantification]
-↓
-nanOTU abundance profiles
-```
 ##### Output
 
-* Fasta file `{basename}_nanoid_nanotus.fasta` of OTU sequences.
-* Count table `{basename}_nanoid_nanotus_counts.tsv` with abundances estimated using Emu against the OTU sequences.
-* Log file `{basename}_nanoid_profile.log`
-
----
-
-## Benchmarking/test data
-
-In preparation.
+* Fasta file `nanoid_asvs.fasta` of ASV sequences.
+* Count table `nanoid_asvs_cts.tsv` ASV abundances.
+* Log file `nanoid_profile.log`
 
 ---
 
@@ -342,8 +288,7 @@ In preparation.
 
 ## Citation
 
-A manuscript describing nanoID is in preparation, and a preprint will be released shortly.  
-In the meantime, please cite this repository when using nanoID.
+A manuscript describing nanoID is in preparation. In the meantime, please cite this repository when using nanoID.
 
 ---
 
